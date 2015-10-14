@@ -32,13 +32,14 @@ import android.widget.Toast;
 
 import com.anki.desk.R;
 import com.anki.desk.activity.adapter.LeDeviceListAdapter;
+import com.anki.desk.service.AnkiBleDevice;
 import com.anki.desk.service.BleService;
 
 public class MainActivity extends Activity {
 
 	private final static String TAG = "MainActivity: ";
 	
-	private Map<String, BluetoothDevice> deviceMap = new HashMap<String, BluetoothDevice>();
+	private ArrayList<AnkiBleDevice> abdList = new ArrayList<AnkiBleDevice>();
 	
 	private ListView bleListView = null; 
 	
@@ -105,26 +106,6 @@ public class MainActivity extends Activity {
 		return super.onOptionsItemSelected(item);
 	}
 	
-	private List<Map<String, Object>> getData() {
-        List<Map<String, Object>> list = new ArrayList<Map<String, Object>>();
- 
-        Set<String> keys = deviceMap.keySet();
-        if(keys!=null&&keys.size()>0){
-        	for(String key : keys){
-        		BluetoothDevice d = deviceMap.get(key);
-        		if(d!=null){
-        			Map<String, Object> map = new HashMap<String, Object>();
-        			map.put("address", key);
-        			map.put("name", d.getName());
-        			list.add(map);
-        		}
-        	}
-        }
-        return list;
-    }
-	
-	
-	
 
 	ServiceConnection conn = new ServiceConnection() {
 		public void onServiceConnected(ComponentName name, IBinder service) {
@@ -140,18 +121,25 @@ public class MainActivity extends Activity {
 		@Override
 		public void onReceive(Context context, Intent intent) {
 			if(intent.getAction().equals(BleService.BROADCAST_ACTION)){
-				boolean isBegin = intent.getBooleanExtra("isBegin", false);
-				boolean isEnd = intent.getBooleanExtra("isEnd", false);
-				BluetoothDevice device = intent.getParcelableExtra("device");
-				System.out.println(TAG + "update ui,isBegin:"+isBegin+",isEnd:"+isEnd+",device:"+device);
-				//TODO update ui
-				if(isBegin){
+				boolean isList = intent.getBooleanExtra("isList", false);
+				if(isList){
+					abdList = intent.getParcelableArrayListExtra("abdList");
 					listViewAdapter.clear();
-				}else if(isEnd){
-					return;
-				}else if(device!=null){
-					listViewAdapter.addDevices(device);
-					deviceMap.put(device.getAddress(), device);
+					listViewAdapter.addAllDevices(abdList);
+				}else{
+					boolean isBegin = intent.getBooleanExtra("isBegin", false);
+					boolean isEnd = intent.getBooleanExtra("isEnd", false);
+					AnkiBleDevice device = intent.getParcelableExtra("device");
+					System.out.println(TAG + "update ui,isBegin:"+isBegin+",isEnd:"+isEnd+",device:"+device);
+					if(isBegin){
+						abdList.clear();
+						listViewAdapter.clear();
+					}else if(isEnd){
+						return;
+					}else if(device!=null){
+						listViewAdapter.addDevices(device);
+						abdList.add(device);
+					}
 				}
 				listViewAdapter.notifyDataSetChanged();
 			}
@@ -178,7 +166,7 @@ public class MainActivity extends Activity {
 		@Override
 		public void onActivityCreated(Bundle savedInstanceState) {
 			bleListView = (ListView) getView().findViewById(R.id.ble_list_view);
-			listViewAdapter = new LeDeviceListAdapter(getLayoutInflater());
+			listViewAdapter = new LeDeviceListAdapter(MainActivity.this,getLayoutInflater());
 			bleListView.setAdapter(listViewAdapter);
 			
 			refreshBtn = (Button) getView().findViewById(R.id.refresh_btn);

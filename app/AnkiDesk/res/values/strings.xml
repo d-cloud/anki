@@ -4,7 +4,11 @@
     <string name="app_name">AnkiDesk</string>
     <string name="hello_world">Hello world!</string>
     <string name="action_settings">Settings</string>
-    <string name="refresh">refresh</string>
+    <string name="refresh">刷新</string>
+    <string name="connect">连接</string>
+    <string name="connecting">连接中...</string>
+    <string name="dis_connect">断开</string>
+    <string name="dis_connecting">断开中...</string>
     
 
 </resources>

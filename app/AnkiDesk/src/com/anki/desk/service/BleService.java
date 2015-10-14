@@ -1,6 +1,8 @@
 package com.anki.desk.service;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import android.app.Service;
@@ -10,7 +12,9 @@ import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattDescriptor;
+import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
+import android.bluetooth.BluetoothProfile;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Handler;
@@ -34,7 +38,7 @@ public class BleService extends Service {
 	private BluetoothManager bluetoothManager = null;
 	private BluetoothAdapter mBluetoothAdapter = null;
 	
-	public Map<String, BluetoothDevice> deviceMap = new HashMap<String, BluetoothDevice>();
+	public ArrayList<AnkiBleDevice> abdList = new ArrayList<AnkiBleDevice>();
 	private Map<String, BluetoothGatt> gattMap = new HashMap<String, BluetoothGatt>();
 	private StringBuffer crValue = new StringBuffer();
 
@@ -67,13 +71,36 @@ public class BleService extends Service {
 
 
 	@Override
+	public void onDestroy() {
+		// TODO Auto-generated method stub
+		if(!gattMap.isEmpty()){
+			for(BluetoothGatt g:gattMap.values()){
+				try {
+					g.close();
+					
+				} catch (Exception e) {
+					// TODO: handle exception
+				}
+			}
+		}
+		super.onDestroy();
+	}
+
+
+
+	@Override
 	public IBinder onBind(Intent arg0) {
 		scanBle();
 		return null;
 	}
 
-	public Map<String, BluetoothDevice> getDeviceMap() {
-		return deviceMap;
+	public AnkiBleDevice getABDevice(String addr){
+		if(abdList.size()>0){
+			for(AnkiBleDevice d:abdList){
+				if(d.getAddress().equals(addr)) return d;
+			}
+		}
+		return null;
 	}
 	
 	public void scanBle(){
@@ -82,24 +109,21 @@ public class BleService extends Service {
 		mHandler.postDelayed(new Runnable() {
 			@Override
 			public void run() {
-				sendBroad(false,true,null);
+				sendBroad(false,false,true,null);
 				mBluetoothAdapter.stopLeScan(mLeScanCallback);
 				System.out.println(TAG + "ending searching BLE");
 			}
 		}, 10000);
-		deviceMap.clear();
-		sendBroad(true,false,null);
+		abdList.clear();
+		sendBroad(false,true,false,null);
 		mBluetoothAdapter.startLeScan(mLeScanCallback);
 		System.out.println(TAG + "start searching BLE");
 	}
 	
 	public void connect(String bleAddress){
-		BluetoothDevice device = null;
-		if(!deviceMap.isEmpty()&&deviceMap.containsKey(bleAddress)){
-			device = deviceMap.get(bleAddress);
-		}
-		if(device!=null){
-			BluetoothGatt  gatt = device.connectGatt(BleService.this,false, mGattCallback);
+		AnkiBleDevice d = getABDevice(bleAddress);
+		if(d!=null){
+			BluetoothGatt  gatt = d.getDevice().connectGatt(BleService.this,false, mGattCallback);
 			gattMap.put(bleAddress, gatt);
 		}
 	}
@@ -113,18 +137,24 @@ public class BleService extends Service {
 	private BluetoothAdapter.LeScanCallback mLeScanCallback = new BluetoothAdapter.LeScanCallback() {
 		@Override
 		public void onLeScan(final BluetoothDevice device, int rssi,byte[] scanRecord) {
-			deviceMap.put(device.getAddress(), device);
-			sendBroad(false,false,device);
+			AnkiBleDevice d = new AnkiBleDevice(device, BluetoothProfile.STATE_DISCONNECTED, rssi);
+			abdList.add(d);
+			sendBroad(false,false,false,d);
 		}
 	};
 	
-	public void sendBroad(boolean isBegin, boolean isEnd, BluetoothDevice device){
+	public void sendBroad(boolean isList, boolean isBegin, boolean isEnd, AnkiBleDevice device){
 		//广播ble列表变化
 		Intent intent = new Intent();
-		intent.putExtra("isBegin", isBegin);
-		intent.putExtra("isEnd", isEnd);
-        intent.putExtra("device", device); 
-        intent.setAction(BROADCAST_ACTION);
+		intent.setAction(BROADCAST_ACTION);
+		intent.putExtra("isList", isList);
+		if(isList){
+			intent.putParcelableArrayListExtra("abdList", abdList);
+		}else{
+			intent.putExtra("isBegin", isBegin);
+			intent.putExtra("isEnd", isEnd);
+			intent.putExtra("device", device); 
+		}
         sendBroadcast(intent);   //发送广播
 	}
 	
@@ -159,7 +189,16 @@ public class BleService extends Service {
 		@Override
 		public void onCharacteristicWrite(BluetoothGatt gatt,
 				BluetoothGattCharacteristic characteristic, int status) {
-			// TODO Auto-generated method stub
+			final byte[] data = characteristic.getValue();
+			if(data!=null && data.length>0){
+				final StringBuilder stringBuilder = new StringBuilder(data.length);
+				for(byte byteChar : data){
+					stringBuilder.append(String.format("%02X ",byteChar));
+					String s = characteristic.getUuid().toString();
+					crValue.append(s.substring(6,8)+":"+stringBuilder.toString());
+				}
+			}
+			System.out.println(TAG + " write characteristic:"+crValue.toString());
 			super.onCharacteristicWrite(gatt, characteristic, status);
 		}
 
@@ -168,6 +207,10 @@ public class BleService extends Service {
 				int newState) {
 			// TODO Auto-generated method stub
 			System.out.println(TAG+" onConnectionStateChange status:"+status+"   newState:"+newState);
+			if(newState==BluetoothProfile.STATE_CONNECTED){
+				boolean y = gatt.discoverServices();
+				System.out.println(y);
+			}
 			super.onConnectionStateChange(gatt, status, newState);
 		}
 
@@ -201,6 +244,22 @@ public class BleService extends Service {
 		@Override
 		public void onServicesDiscovered(BluetoothGatt gatt, int status) {
 			// TODO Auto-generated method stub
+			List<BluetoothGattService> services = gatt.getServices();
+			BluetoothGattService s = services.get(3);
+			for(BluetoothGattCharacteristic c :s.getCharacteristics()){
+				/*if((c.getProperties()&PropertiesMenu.READ.getP())==PropertiesMenu.READ.getP()){
+					gatt.readCharacteristic(c);
+				}else if((c.getProperties()&PropertiesMenu.WRITE.getP())==PropertiesMenu.WRITE.getP()){
+					System.out.println(TAG+" uuid:"+c.getUuid());
+					c.setValue("5".getBytes());
+					gatt.writeCharacteristic(c);
+				}*/
+				if((c.getProperties()&PropertiesMenu.WRITE.getP())==PropertiesMenu.WRITE.getP()){
+					System.out.println(TAG+" uuid:"+c.getUuid());
+					c.setValue(new byte[]{5});
+					gatt.writeCharacteristic(c);
+				}
+			}
 			super.onServicesDiscovered(gatt, status);
 		}
 		

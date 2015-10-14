@@ -9,13 +9,16 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content" 
             android:textColor="#FFFFFFFF"
-            android:textSize="22dp" />
+            android:textSize="12sp" />
         <TextView android:id="@+id/ble_name" 
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" 
+            android:layout_width="60dp"
+            android:layout_height="20dp" 
             android:textColor="#FFFFFFFF"
-            android:textSize="20dp" />
+            android:textSize="12sp" />
  
- 
+ 		<Button android:id="@+id/connectBtn"
+ 		    android:text="@string/connect"
+ 		    android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
  
 </LinearLayout>
