@@ -8,12 +8,12 @@
         <TextView android:id="@+id/ble_address" 
             android:layout_width="wrap_content"
             android:layout_height="wrap_content" 
-            android:textColor="#FFFFFFFF"
+            android:textColor="#000000"
             android:textSize="12sp" />
         <TextView android:id="@+id/ble_name" 
             android:layout_width="60dp"
             android:layout_height="20dp" 
-            android:textColor="#FFFFFFFF"
+            android:textColor="#000000"
             android:textSize="12sp" />
  
  		<Button android:id="@+id/connectBtn"
